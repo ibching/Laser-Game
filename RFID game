@@ -1,0 +1,130 @@
+
+#include <SPI.h>
+#include <MFRC522.h>
+
+#define CLOSED 0
+#define FIRST_CLEARED 1
+#define SECOND_CLEARED 2
+#define THIRD_CLEARED 3
+#define OPENED 4
+
+const byte numReaders = 1;
+const byte ssPin = 2;
+const byte resetPin = 9;
+const int laserPin = 3;
+byte currentState = 0;
+byte tappedCount = 0;
+
+
+MFRC522 mfrc522;
+const byte relaySignalPin = 8;
+
+const byte LEDs[] = {4,5,6,7};
+const byte ledsNum = 4;
+const String correctIDs[] = {"baef7d83", "39c87659", "a9ad16d3", "315862a3"};
+const byte numberOfTimesToTap[] = {1,2,2,2};
+const unsigned long timeLimit = 5000;
+unsigned long lastMillis;
+
+
+void setup() {
+  // put your setup code here, to run once:
+ pinMode(relaySignalPin, OUTPUT); 
+ pinMode(laserPin, OUTPUT);
+  
+ for(int i = 0; i<ledsNum; i++){
+  pinMode(LEDs[i], OUTPUT); 
+ }
+ Serial.begin(9600);
+ SPI.begin();
+ mfrc522.PCD_Init(ssPin, resetPin); 
+ Serial.print(F("Reader "));
+ Serial.print(F(": "));
+ mfrc522.PCD_DumpVersionToSerial();
+ //mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_Max);
+ delay(100);
+ lastMillis = millis();
+
+ // change to LOW if you want to flip the way the lock works
+ digitalWrite(relaySignalPin, HIGH); 
+}
+
+void loop() {
+  String readRFID = "";
+  if(mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial())
+  {    
+    readRFID = dump_byte_array(mfrc522.uid.uidByte,mfrc522.uid.size);
+    Serial.println(readRFID);
+
+    if(readRFID == correctIDs[currentState]){
+      tappedCount+=1;
+      lastMillis = millis();
+      if(tappedCount == numberOfTimesToTap[currentState]) {
+        currentState+=1;
+        tappedCount=0;      
+      }  
+
+      // If overshot number of times to tap
+      if(tappedCount > numberOfTimesToTap[currentState]){
+        currentState = CLOSED;  
+      }
+
+      delay(300); 
+    }
+    else{
+      currentState = CLOSED;  
+    }
+    // Halt PICC
+    mfrc522.PICC_HaltA();
+    // Stop encryption on PCD
+    mfrc522.PCD_StopCrypto1();
+  }
+
+  // If exceed time limit..
+  if(millis() - lastMillis > timeLimit && currentState != OPENED){
+    lastMillis = millis();
+    currentState = CLOSED;    
+  }
+
+  // After state changes..
+
+  // Light LEDs based on progress
+  light_leds(currentState);
+
+  // Open door
+  if(currentState == OPENED){
+
+    // change to HIGH if you want to flip the way the lock works
+    digitalWrite(relaySignalPin, LOW);
+    digitalWrite(laserPin, HIGH);
+    Serial.println("door opened");
+  }
+  
+}
+
+
+void light_leds(byte state){
+  // LEDs Light up sequence
+  // State CLOSED(0) : No LED 
+  // State FIRST_CLEARED(1) : LED 0 
+  // State SECOND_CLEARED(2) : LED 0, 1 
+  // State THIRD_CLEARED(3) : LED 0, 1, 2
+  // State OPENED(4) : LED 0, 1, 2, 3
+  for(int i = 0; i < ledsNum; i++){
+    if(i < state){
+      digitalWrite(LEDs[i], HIGH);    
+    }
+    else{
+      digitalWrite(LEDs[i], LOW);      
+    }
+  }
+  
+}
+
+String dump_byte_array(byte *buffer, byte bufferSize) {
+    String strData;
+    for(int i = 0; i < bufferSize; i++){
+      strData += String(buffer[i], HEX);  
+    }
+    return strData;
+}
