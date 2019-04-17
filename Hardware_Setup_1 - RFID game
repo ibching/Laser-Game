@@ -46,7 +46,7 @@ void setup() {
  lastMillis = millis();
 
  // change to LOW if you want to flip the way the lock works
- digitalWrite(relaySignalPin, HIGH); 
+ digitalWrite(relaySignalPin, LOW); 
 }
 
 void loop() {
@@ -95,7 +95,7 @@ void loop() {
   if(currentState == OPENED){
 
     // change to HIGH if you want to flip the way the lock works
-    digitalWrite(relaySignalPin, LOW);
+    digitalWrite(relaySignalPin, HIGH);
     digitalWrite(laserPin, HIGH);
     Serial.println("door opened");
   }
